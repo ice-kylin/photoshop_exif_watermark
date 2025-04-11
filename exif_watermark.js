@@ -1,4 +1,9 @@
-// noinspection JSUnresolvedReference
+// noinspection JSUnresolvedReference,JSLastCommaInObjectLiteral,JSLastCommaInArrayLiteral
+
+var POSITION = {
+    BOTTOM_MIDDLE: 0,
+    BOTTOM_LEFT: 1,
+};
 
 var FOCAL_STR = "%E7%84%A6%E8%B7%9D"; // 焦距
 var SHUTTER_STR = "%E6%9B%9D%E5%85%89%E6%97%B6%E9%97%B4"; // 曝光时间
@@ -7,14 +12,15 @@ var ISO_STR = "ISO%20%E6%84%9F%E5%85%89%E5%BA%A6"; // ISO 感光度
 var CROP_FACTOR = 1.61; // 等效焦距换算系数
 var NAME = "IceKylin"; // 名字
 var NAME_FONT_NAME = "KpSans-Regular";
-var NAME_FONT_SIZE = 36;
+var NAME_FONT_SIZE = 30;
 var NAME_FONT_CAPITALIZATION = TextCase.SMALLCAPS;
 var EXIF_FONT_NAME = "KpRoman-Regular";
-var EXIF_FONT_SIZE = 18;
+var EXIF_FONT_SIZE = 14;
 var EXIF_FONT_CAPITALIZATION = TextCase.NORMAL;
 var FONT_COLOR = "FFFFFF";
 var DISTANCE = 36; // 名字水印与 EXIF 水印的距离
-var MARGIN = 64; // 水印与边缘的距离
+var MARGIN = 72; // 水印与边缘的距离
+var WATERMARK_POSITION = POSITION.BOTTOM_MIDDLE; // 水印位置
 
 function main() {
     var sourceFolder = Folder.selectDialog("选择要处理的照片文件夹");
@@ -39,7 +45,7 @@ function main() {
 
 function parseEXIF(doc) {
     var exif = {
-        focal: "", shutter: "", aperture: "", iso: ""
+        focal: "", shutter: "", aperture: "", iso: "",
     };
 
     var exifData = doc.info.exif;
@@ -69,7 +75,18 @@ function createEXIFWatermark(doc, exif) {
     var textItem = textLayer.textItem;
     setTextItem(textItem, getContents(exif), EXIF_FONT_SIZE, FONT_COLOR, EXIF_FONT_NAME, EXIF_FONT_CAPITALIZATION);
     var position = getLayerPosition(textLayer);
-    textLayer.translate(new UnitValue(64 - position.topLeftX, "px"), new UnitValue(doc.height.as("px") - position.height - position.topLeftY - MARGIN, "px",),);
+
+    if (WATERMARK_POSITION === POSITION.BOTTOM_MIDDLE) {
+        textLayer.translate(
+            new UnitValue(doc.width.as("px") / 2 - position.width / 2 - position.topLeftX, "px"),
+            new UnitValue(doc.height.as("px") - position.height - position.topLeftY - MARGIN, "px")
+        );
+    } else if (WATERMARK_POSITION === POSITION.BOTTOM_LEFT) {
+        textLayer.translate(
+            new UnitValue(64 - position.topLeftX, "px"),
+            new UnitValue(doc.height.as("px") - position.height - position.topLeftY - MARGIN, "px")
+        );
+    }
 
     return position.height;
 }
@@ -82,16 +99,23 @@ function createNameWatermark(doc, exifWatermarkHeight) {
     setTextItem(textItem, NAME, NAME_FONT_SIZE, FONT_COLOR, NAME_FONT_NAME, NAME_FONT_CAPITALIZATION);
 
     var position = getLayerPosition(textLayer);
-    textLayer.translate(new UnitValue(64 - position.topLeftX, "px"), new UnitValue(doc.height.as("px") - position.height - position.topLeftY - MARGIN - exifWatermarkHeight - DISTANCE, "px",),);
+
+    if (WATERMARK_POSITION === POSITION.BOTTOM_MIDDLE) {
+        textLayer.translate(new UnitValue(doc.width.as("px") / 2 - position.width / 2 - position.topLeftX, "px"), new UnitValue(doc.height.as("px") - position.height - position.topLeftY - MARGIN - exifWatermarkHeight - DISTANCE, "px"));
+    } else if (WATERMARK_POSITION === POSITION.BOTTOM_LEFT) {
+        textLayer.translate(new UnitValue(64 - position.topLeftX, "px"), new UnitValue(doc.height.as("px") - position.height - position.topLeftY - MARGIN - exifWatermarkHeight - DISTANCE, "px"));
+    }
 }
 
 function getLayerPosition(textLayer) {
     var topLeftX = textLayer.bounds[0].as("px");
     var topLeftY = textLayer.bounds[1].as("px");
+    var bottomRightX = textLayer.bounds[2].as("px");
     var bottomRightY = textLayer.bounds[3].as("px");
     var height = bottomRightY - topLeftY;
+    var width = bottomRightX - topLeftX;
 
-    return {topLeftX: topLeftX, topLeftY: topLeftY, height: height};
+    return {topLeftX: topLeftX, topLeftY: topLeftY, height: height, width: width};
 }
 
 function setTextItem(textItem, contents, size, color, font, capitalization) {
@@ -104,12 +128,16 @@ function setTextItem(textItem, contents, size, color, font, capitalization) {
 
 function getContents(exif) {
     return [
-        getFocalStr(exif.focal), exif.aperture, getShutterStr(exif.shutter), getISOStr(exif.iso)
-    ].join("  ");
+        getApertureStr(exif.aperture), getShutterStr(exif.shutter), getFocalStr(exif.focal), getISOStr(exif.iso),
+    ].join(" · ");
 }
 
-function getFocalStr(aperture) {
-    return Math.round(parseInt(aperture.split(" ")[0]) * CROP_FACTOR) + "mm";
+function getFocalStr(focal) {
+    return Math.round(parseInt(focal.split(" ")[0]) * CROP_FACTOR) + "mm";
+}
+
+function getApertureStr(aperture) {
+    return "F" + aperture.split("f")[1];
 }
 
 function getShutterStr(shutter) {
